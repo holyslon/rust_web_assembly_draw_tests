@@ -17,10 +17,11 @@ function load() {
     return new ImageData(buffer, canvas.width, canvas.height, {})
 }
 
-const data = load()
+//const data = load()
 
 function loop() {
     board.do_draw();
+    const data = load()
     createImageBitmap(data, 0, 0, canvas.width, canvas.height).
     then(bitmap => {
         ctx.transferFromImageBitmap(bitmap)
@@ -28,3 +29,42 @@ function loop() {
     requestAnimationFrame(loop)
 }
 loop()
+
+function drawLine() {
+    return board.put_line(255, 255, 2, canvas.width / 2, canvas.height / 2, 100, 50);
+}
+const lineId = drawLine();
+
+var stepX = 0;
+var stepY = 0;
+
+function changeLine() {
+    board.change_line(lineId, 255, 0, 0, canvas.width / 2, canvas.height / 2, stepX, stepY)
+    if (stepY == 0) {
+        if (stepX < canvas.width - 1) {
+            stepX += 1
+            return
+        }
+    }
+    if (stepX == canvas.width - 1) {
+        if (stepY < canvas.height - 1) {
+            stepY += 1
+            return
+        }
+    }
+    if (stepY == canvas.height - 1) {
+        if (stepX > 0) {
+            stepX -= 1;
+            return
+        }
+    }
+    if (stepX == 0) {
+        if (stepY > 0) {
+            stepY -= 1;
+            return
+        }
+    }
+
+}
+
+setInterval(changeLine, 20)

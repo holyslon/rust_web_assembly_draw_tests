@@ -1,9 +1,13 @@
-use rand::random;
-use tiny_skia::Color;
-use tiny_skia::Paint;
+use log::info;
 use tiny_skia::Pixmap;
-use tiny_skia_path::IntSize;
 use wasm_bindgen::prelude::*;
+
+mod contracts;
+mod model;
+mod paint;
+
+use model::{Color, Point, Shape};
+use paint::Paintable;
 
 #[wasm_bindgen(start)]
 pub fn start() {
@@ -18,15 +22,26 @@ pub fn start() {
 #[wasm_bindgen]
 pub struct Board {
     map: Pixmap,
+
+    changed: bool,
+    shapes: model::Shapes,
 }
 
 #[wasm_bindgen]
 impl Board {
     pub fn new(width: u32, height: u32) -> Board {
         let map = Pixmap::new(width, height).unwrap();
-        let mut result = Board { map: map };
+        let mut result = Board {
+            map: map,
+            changed: true,
+            shapes: model::Shapes::new(),
+        };
         result.do_draw();
         result
+    }
+
+    pub fn batch(&mut self, data: String) {
+        let req: contracts::BatchRequest = serde_json::from_str(&data).unwrap();
     }
 
     pub fn buffer_pointer(&self) -> usize {
@@ -37,7 +52,60 @@ impl Board {
         self.map.data().len()
     }
 
+    pub fn put_line(
+        &mut self,
+        red: u8,
+        green: u8,
+        blue: u8,
+        start_x: u32,
+        start_y: u32,
+        end_x: u32,
+        end_y: u32,
+    ) -> String {
+        let id = self.shapes.generate_id();
+        let result = id.clone();
+
+        self.shapes.add(Shape::new(
+            id,
+            Color::new(red, green, blue, 255),
+            vec![Point::new(start_x, start_y), Point::new(end_x, end_y)],
+        ));
+        return result;
+    }
+
+    pub fn change_line(
+        &mut self,
+        id: String,
+        red: u8,
+        green: u8,
+        blue: u8,
+        start_x: u32,
+        start_y: u32,
+        end_x: u32,
+        end_y: u32,
+    ) {
+        self.shapes.change(&id, &mut |shape| {
+            shape.set_fill(Color::new(red, green, blue, 255));
+            shape.reset_path(vec![Point::new(start_x, start_y), Point::new(end_x, end_y)]);
+        });
+    }
+
     pub fn do_draw(&mut self) {
-        self.map.fill(Color::from_rgba8(90, 90, 90, 255));
+        if self.shapes.need_drawing() {
+            info!("Detect changes refresh");
+            self.changed = false;
+            self.map.fill(tiny_skia::Color::from_rgba8(90, 90, 90, 10));
+            for shape in self.shapes.iter() {
+                shape.paint(&mut self.map.as_mut());
+            }
+            let map = &self.map;
+            let first = map.pixel(0, 0).unwrap();
+            info!(
+                "Result {}, first {}",
+                format!("{map:?}"),
+                format!("{first:?}")
+            );
+            self.shapes.changes_drawed()
+        }
     }
 }
