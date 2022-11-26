@@ -1,4 +1,3 @@
-use log::info;
 use tiny_skia::Pixmap;
 use wasm_bindgen::prelude::*;
 
@@ -22,8 +21,6 @@ pub fn start() {
 #[wasm_bindgen]
 pub struct Board {
     map: Pixmap,
-
-    changed: bool,
     shapes: model::Shapes,
 }
 
@@ -33,7 +30,6 @@ impl Board {
         let map = Pixmap::new(width, height).unwrap();
         let mut result = Board {
             map: map,
-            changed: true,
             shapes: model::Shapes::new(),
         };
         result.do_draw();
@@ -42,6 +38,7 @@ impl Board {
 
     pub fn batch(&mut self, data: String) {
         let req: contracts::BatchRequest = serde_json::from_str(&data).unwrap();
+        req.apply(&mut self.shapes)
     }
 
     pub fn buffer_pointer(&self) -> usize {
@@ -92,19 +89,10 @@ impl Board {
 
     pub fn do_draw(&mut self) {
         if self.shapes.need_drawing() {
-            info!("Detect changes refresh");
-            self.changed = false;
             self.map.fill(tiny_skia::Color::from_rgba8(90, 90, 90, 10));
             for shape in self.shapes.iter() {
                 shape.paint(&mut self.map.as_mut());
             }
-            let map = &self.map;
-            let first = map.pixel(0, 0).unwrap();
-            info!(
-                "Result {}, first {}",
-                format!("{map:?}"),
-                format!("{first:?}")
-            );
             self.shapes.changes_drawed()
         }
     }

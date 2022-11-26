@@ -74,11 +74,17 @@ impl Shapes {
         F: FnMut(&mut Shape),
     {
         let value = self.shapes.get_mut(key);
-        if let Some(actualValue) = value {
-            f(actualValue);
+        if let Some(actual_value) = value {
+            f(actual_value);
             self.changed = true
         } else {
             info!("No shape with key {}", key)
+        }
+    }
+
+    pub fn remove(&mut self, key: &String) {
+        if let None = self.shapes.remove(key) {
+            info!("Remove not existing key {}", key)
         }
     }
 

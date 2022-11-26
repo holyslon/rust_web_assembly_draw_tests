@@ -19,6 +19,44 @@ function load() {
 
 //const data = load()
 
+function add_line(id, r, g, b, a, sx, sy, ex, ey) {
+    return {
+        id: id,
+        fill: {
+            red: r,
+            green: g,
+            blue: b,
+            alpha: a,
+        },
+        from: {
+            x: sx,
+            y: sy
+        },
+        to: {
+            x: ex,
+            y: ey
+        }
+    }
+}
+
+function change_line_end(id, ex, ey) {
+    return {
+        id: id,
+        to: {
+            x: ex,
+            y: ey
+        }
+    }
+}
+
+function batch(add, change) {
+    return JSON.stringify({
+        add: add,
+        change: change,
+        remove: []
+    })
+}
+
 function loop() {
     board.do_draw();
     const data = load()
@@ -31,7 +69,9 @@ function loop() {
 loop()
 
 function drawLine() {
-    return board.put_line(255, 255, 2, canvas.width / 2, canvas.height / 2, 100, 50);
+    const id = "first line"
+    board.batch(batch([add_line(id, 255, 255, 2, 255, canvas.width / 2, canvas.height / 2, 100, 50)], []))
+    return id;
 }
 const lineId = drawLine();
 
@@ -39,7 +79,7 @@ var stepX = 0;
 var stepY = 0;
 
 function changeLine() {
-    board.change_line(lineId, 255, 0, 0, canvas.width / 2, canvas.height / 2, stepX, stepY)
+    board.batch(batch([], [change_line_end(lineId, stepX, stepY)]))
     if (stepY == 0) {
         if (stepX < canvas.width - 1) {
             stepX += 1
@@ -67,4 +107,4 @@ function changeLine() {
 
 }
 
-setInterval(changeLine, 20)
+setInterval(changeLine, 10)
