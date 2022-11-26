@@ -47,9 +47,57 @@ impl Into<super::model::Shape> for &ShapeDto {
 #[derive(Deserialize)]
 pub struct ChangeShapeDto {
     id: String,
+    #[serde(default)]
     fill: Option<Color>,
+    #[serde(default)]
     from: Option<Point>,
+    #[serde(default)]
     to: Option<Point>,
+}
+
+#[cfg(test)]
+mod change_shape_dto_tests {
+    #[test]
+    fn test_id_and_to() {
+        let data = r#"
+        {
+            "id": "some_id",
+
+            "to": {
+                "x":1,
+                "y":2
+            }
+        }"#;
+        let result: Result<super::ChangeShapeDto, serde_json::Error> = serde_json::from_str(data);
+
+        match result {
+            Ok(actual) => {
+                assert_eq!(actual.id, "some_id");
+                match actual.to {
+                    Some(point) => {
+                        assert_eq!(point.x, 1);
+                        assert_eq!(point.y, 2);
+                    }
+                    None => panic!("Fail to deserialize 'to'"),
+                }
+            }
+            Err(error) => panic!("Deserialize failed {}", error),
+        };
+    }
+
+    #[test]
+    fn test_id_only() {
+        let data = r#"
+        {
+            "id": "some_id"
+        }"#;
+        let result: Result<super::ChangeShapeDto, serde_json::Error> = serde_json::from_str(data);
+
+        match result {
+            Ok(actual) => assert_eq!(actual.id, "some_id"),
+            Err(error) => panic!("Deserialize failed {}", error),
+        };
+    }
 }
 
 #[derive(Deserialize)]
@@ -85,5 +133,46 @@ impl BatchRequest {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod batch_request_tests {
+    #[test]
+    fn test_change_with_id_and_to() {
+        let data = r#"{"add":[],"change":[{"id":"0","to":{"x":1,"y":0}}],"remove":[]}"#;
+        let result: Result<super::BatchRequest, serde_json::Error> = serde_json::from_str(data);
+
+        match result {
+            Ok(actual) => {
+                assert_eq!(actual.add.len(), 0);
+                assert_eq!(actual.remove.len(), 0);
+                assert_eq!(actual.change.len(), 1);
+                let change = &actual.change[0];
+                assert_eq!(change.id, "0");
+                match &change.to {
+                    Some(point) => {
+                        assert_eq!(point.x, 1);
+                        assert_eq!(point.y, 0);
+                    }
+                    None => panic!("Fail to deserialize 'to'"),
+                }
+            }
+            Err(error) => panic!("Deserialize failed {}", error),
+        };
+    }
+
+    #[test]
+    fn test_id_only() {
+        let data = r#"
+        {
+            "id": "some_id"
+        }"#;
+        let result: Result<super::ChangeShapeDto, serde_json::Error> = serde_json::from_str(data);
+
+        match result {
+            Ok(actual) => assert_eq!(actual.id, "some_id"),
+            Err(error) => panic!("Deserialize failed {}", error),
+        };
     }
 }

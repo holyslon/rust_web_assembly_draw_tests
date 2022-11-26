@@ -1,3 +1,4 @@
+use log::info;
 use tiny_skia::Pixmap;
 use wasm_bindgen::prelude::*;
 
@@ -36,9 +37,12 @@ impl Board {
         result
     }
 
-    pub fn batch(&mut self, data: String) {
-        let req: contracts::BatchRequest = serde_json::from_str(&data).unwrap();
-        req.apply(&mut self.shapes)
+    pub fn batch(&mut self, data: &str) {
+        let result: Result<contracts::BatchRequest, serde_json::Error> = serde_json::from_str(data);
+        match result {
+            Ok(req) => req.apply(&mut self.shapes),
+            Err(error) => info!("Fail to read batch {}, Error {}", data, error),
+        };
     }
 
     pub fn buffer_pointer(&self) -> usize {
@@ -89,7 +93,8 @@ impl Board {
 
     pub fn do_draw(&mut self) {
         if self.shapes.need_drawing() {
-            self.map.fill(tiny_skia::Color::from_rgba8(90, 90, 90, 10));
+            self.map
+                .fill(tiny_skia::Color::from_rgba8(255, 40, 255, 100));
             for shape in self.shapes.iter() {
                 shape.paint(&mut self.map.as_mut());
             }

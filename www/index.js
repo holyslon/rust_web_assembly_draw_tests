@@ -17,7 +17,7 @@ function load() {
     return new ImageData(buffer, canvas.width, canvas.height, {})
 }
 
-//const data = load()
+const data = load()
 
 function add_line(id, r, g, b, a, sx, sy, ex, ey) {
     return {
@@ -59,7 +59,6 @@ function batch(add, change) {
 
 function loop() {
     board.do_draw();
-    const data = load()
     createImageBitmap(data, 0, 0, canvas.width, canvas.height).
     then(bitmap => {
         ctx.transferFromImageBitmap(bitmap)
@@ -68,41 +67,87 @@ function loop() {
 }
 loop()
 
-function drawLine() {
-    const id = "first line"
-    board.batch(batch([add_line(id, 255, 255, 2, 255, canvas.width / 2, canvas.height / 2, 100, 50)], []))
-    return id;
-}
-const lineId = drawLine();
+class Line {
+    constructor(id, r, g, b, x, y) {
+        this.id = `${id}`
+        this.r = r
+        this.g = g
+        this.b = b
+        this.x = x
+        this.y = y
+    }
 
-var stepX = 0;
-var stepY = 0;
+    add() {
+        return add_line(this.id, this.r, this.g, this.b, 255, canvas.width / 2, canvas.height / 2, this.x, this.y)
+    }
+
+    change() {
+        if (this.y == 0) {
+            if (this.x < canvas.width - 1) {
+                this.x += 1
+                return change_line_end(this.id, this.x, this.y)
+            }
+        }
+        if (this.x == canvas.width - 1) {
+            if (this.y < canvas.height - 1) {
+                this.y += 1
+                return change_line_end(this.id, this.x, this.y)
+            }
+        }
+        if (this.y == canvas.height - 1) {
+            if (this.x > 0) {
+                this.x -= 1;
+                return change_line_end(this.id, this.x, this.y)
+            }
+        }
+        if (this.x == 0) {
+            if (this.y > 0) {
+                this.y -= 1;
+                return change_line_end(this.id, this.x, this.y)
+            }
+        }
+        return change_line_end(this.id, this.x, this.y)
+    }
+}
+
+const cell = 10
+
+const x_grid = [...Array(canvas.width / cell).keys()].map(function (index) {
+    return add_line(`x-grid-${index}`, 0, 0, 0, 100, index * cell, 0, index * cell, canvas.height)
+})
+const y_grid = [...Array(canvas.height / cell).keys()].map(function (index) {
+    return add_line(`y-grid-${index}`, 0, 0, 0, 100, 0, index * cell, canvas.width, index * cell)
+})
+
+
+const lines = [...Array(100).keys()].map(function (index) {
+    return new Line(index, index % 255, (index * 2) % 255, (index * 3) % 255, index % canvas.width, 0)
+})
+
+const lines_add = lines.map(function (line) {
+    return line.add()
+})
+
+const lines_add_batch = batch(lines_add.concat(x_grid).concat(y_grid), [])
+
+board.batch(lines_add_batch)
+
 
 function changeLine() {
-    board.batch(batch([], [change_line_end(lineId, stepX, stepY)]))
-    if (stepY == 0) {
-        if (stepX < canvas.width - 1) {
-            stepX += 1
+    try {
+        if (lines.length == 0) {
             return
         }
-    }
-    if (stepX == canvas.width - 1) {
-        if (stepY < canvas.height - 1) {
-            stepY += 1
+        const changes = lines.map(function (line) {
+            return line.change()
+        })
+        if (changes == null) {
             return
         }
-    }
-    if (stepY == canvas.height - 1) {
-        if (stepX > 0) {
-            stepX -= 1;
-            return
-        }
-    }
-    if (stepX == 0) {
-        if (stepY > 0) {
-            stepY -= 1;
-            return
-        }
+        const batch_s = batch([], changes)
+        board.batch(batch_s)
+    } catch (err) {
+        console.log("Error", err)
     }
 
 }

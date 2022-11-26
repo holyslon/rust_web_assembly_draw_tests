@@ -35,6 +35,7 @@ impl Paintable for super::model::Shape {
             }
             pb.finish().unwrap()
         };
+
         let res = map.stroke_path(
             &path,
             &paint,
