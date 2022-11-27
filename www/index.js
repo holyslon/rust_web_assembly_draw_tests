@@ -121,14 +121,14 @@ const y_grid = [...Array(canvas.height / cell).keys()].map(function (index) {
 
 
 const lines = [...Array(100).keys()].map(function (index) {
-    return new Line(index, index % 255, (index * 2) % 255, (index * 3) % 255, index % canvas.width, 0)
+    return new Line(`z-${index}`, index % 255, (index * 2) % 255, (index * 3) % 255, index % canvas.width, 0)
 })
 
 const lines_add = lines.map(function (line) {
     return line.add()
 })
 
-const lines_add_batch = batch(lines_add.concat(x_grid).concat(y_grid), [])
+const lines_add_batch = batch(x_grid.concat(y_grid).concat(lines_add), [])
 
 board.batch(lines_add_batch)
 

@@ -6,8 +6,8 @@ mod contracts;
 mod model;
 mod paint;
 
-use model::{Color, Point, Shape};
-use paint::Paintable;
+use model::{Color, NewShape, Point, ShapeDescription, Shapes};
+use paint::{Paintable, PixmapPainter};
 
 #[wasm_bindgen(start)]
 pub fn start() {
@@ -22,7 +22,7 @@ pub fn start() {
 #[wasm_bindgen]
 pub struct Board {
     map: Pixmap,
-    shapes: model::Shapes,
+    shapes: Shapes<PixmapPainter>,
 }
 
 #[wasm_bindgen]
@@ -33,6 +33,13 @@ impl Board {
             map: map,
             shapes: model::Shapes::new(),
         };
+        result.shapes.add(NewShape::<PixmapPainter>::new(
+            String::from("background"),
+            ShapeDescription::Fill {
+                fill: Color::new(255, 40, 255, 100),
+            },
+            0,
+        ));
         result.do_draw();
         result
     }
@@ -66,11 +73,16 @@ impl Board {
         let id = self.shapes.generate_id();
         let result = id.clone();
 
-        self.shapes.add(Shape::new(
-            id,
-            Color::new(red, green, blue, 255),
-            vec![Point::new(start_x, start_y), Point::new(end_x, end_y)],
-        ));
+        self.shapes
+            .add(model::NewShape::<paint::PixmapPainter>::new(
+                id,
+                model::ShapeDescription::Line {
+                    fill: model::Color::new(red, green, blue, 255),
+                    from: model::Point::new(start_x, start_y),
+                    to: model::Point::new(end_x, end_y),
+                },
+                0,
+            ));
         return result;
     }
 
@@ -86,15 +98,23 @@ impl Board {
         end_y: u32,
     ) {
         self.shapes.change(&id, &mut |shape| {
-            shape.set_fill(Color::new(red, green, blue, 255));
-            shape.reset_path(vec![Point::new(start_x, start_y), Point::new(end_x, end_y)]);
+            shape.change_description(&mut |d| match d {
+                ShapeDescription::Line {
+                    fill: _,
+                    from: _,
+                    to: _,
+                } => ShapeDescription::Line {
+                    fill: Color::new(red, green, blue, 255),
+                    from: Point::new(start_x, start_y),
+                    to: Point::new(end_x, end_y),
+                },
+                _ => *d,
+            });
         });
     }
 
     pub fn do_draw(&mut self) {
         if self.shapes.need_drawing() {
-            self.map
-                .fill(tiny_skia::Color::from_rgba8(255, 40, 255, 100));
             for shape in self.shapes.iter() {
                 shape.paint(&mut self.map.as_mut());
             }

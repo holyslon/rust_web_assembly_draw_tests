@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use super::model::{NewShape, ShapeDescription};
+
 #[derive(Deserialize)]
 pub struct Color {
     red: u8,
@@ -40,6 +42,22 @@ impl Into<super::model::Shape> for &ShapeDto {
             self.id.clone(),
             (&self.fill).into(),
             vec![(&self.from).into(), (&self.to).into()],
+        )
+    }
+}
+
+use core::fmt::Debug;
+
+impl<T: super::model::NeedToDraw + Default + Debug + Clone> Into<NewShape<T>> for &ShapeDto {
+    fn into(self) -> NewShape<T> {
+        NewShape::<T>::new(
+            self.id.clone(),
+            ShapeDescription::Line {
+                fill: (&self.fill).into(),
+                from: (&self.from).into(),
+                to: (&self.to).into(),
+            },
+            10,
         )
     }
 }
@@ -108,7 +126,12 @@ pub struct BatchRequest {
 }
 
 impl BatchRequest {
-    pub fn apply(&self, shapes: &mut super::model::Shapes) {
+    pub fn apply<T: super::model::NeedToDraw + Default + Debug + Clone>(
+        &self,
+        shapes: &mut super::model::Shapes<T>,
+    ) where
+        T: super::model::NeedToDraw,
+    {
         for shape in &self.add {
             shapes.add(shape.into())
         }
@@ -118,18 +141,34 @@ impl BatchRequest {
         for change in &self.change {
             shapes.change(&change.id, &mut |shape| {
                 if let Some(fill) = &change.fill {
-                    shape.set_fill(fill.into())
+                    shape.change_description(&mut |d| match d {
+                        ShapeDescription::Line { fill: _, from, to } => ShapeDescription::Line {
+                            fill: fill.into(),
+                            from: *from,
+                            to: *to,
+                        },
+                        _ => *d,
+                    });
                 }
                 if let Some(from) = &change.from {
-                    let mut new_path = vec![from.into()];
-                    for point in &shape.path()[1..] {
-                        new_path.push(*point)
-                    }
-                    shape.reset_path(new_path);
+                    shape.change_description(&mut |d| match d {
+                        ShapeDescription::Line { fill, from: _, to } => ShapeDescription::Line {
+                            fill: *fill,
+                            from: from.into(),
+                            to: *to,
+                        },
+                        _ => *d,
+                    });
                 }
                 if let Some(to) = &change.to {
-                    let from = shape.path()[0];
-                    shape.reset_path(vec![from, to.into()]);
+                    shape.change_description(&mut |d| match d {
+                        ShapeDescription::Line { fill, from, to: _ } => ShapeDescription::Line {
+                            fill: *fill,
+                            from: *from,
+                            to: to.into(),
+                        },
+                        _ => *d,
+                    });
                 }
             })
         }

@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use derivative::Derivative;
 use derive_getters::{Dissolve, Getters};
 use derive_new::new;
 use log::info;
+use sorted_vec::SortedVec;
 
 #[derive(Derivative, Getters, Dissolve, new)]
 #[derivative(Debug, Copy, Clone)]
@@ -37,63 +38,147 @@ impl Shape {
         self.path = new_path
     }
 }
-
-pub struct Shapes {
-    shapes: HashMap<String, Shape>,
-    changed: bool,
+#[derive(Debug, Clone, Copy)]
+pub enum ShapeDescription {
+    Line { fill: Color, from: Point, to: Point },
+    Fill { fill: Color },
 }
 
-impl IntoIterator for Shapes {
-    type Item = Shape;
+pub trait NeedToDraw {
+    fn need_drawing(&self) -> bool;
 
-    type IntoIter = std::collections::hash_map::IntoValues<String, Shape>;
+    fn changes_drawed(&mut self);
+}
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.shapes.into_values()
+#[derive(Debug, Clone)]
+pub struct NewShape<T: NeedToDraw + Default + Debug + Clone> {
+    holder: T,
+    id: String,
+    description: ShapeDescription,
+    changed: bool,
+    z_order: i64,
+}
+
+impl<T: NeedToDraw + Default + Debug + Clone> PartialEq for NewShape<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl<T: NeedToDraw + Default + Debug + Clone> PartialOrd for NewShape<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<T: NeedToDraw + Default + Debug + Clone> Eq for NewShape<T> {}
+
+impl<T: NeedToDraw + Default + Debug + Clone> Ord for NewShape<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.z_order
+            .cmp(&other.z_order)
+            .then(self.id.cmp(&other.id))
     }
 }
 
-impl Shapes {
-    pub fn new() -> Shapes {
+impl<T: NeedToDraw + Default + Debug + Clone> NewShape<T> {
+    pub fn new(id: String, description: ShapeDescription, z_order: i64) -> NewShape<T> {
+        NewShape {
+            holder: Default::default(),
+            id: id,
+            description: description,
+            changed: true,
+            z_order: z_order,
+        }
+    }
+
+    pub fn change_description<F: Fn(&ShapeDescription) -> ShapeDescription>(&mut self, f: &mut F) {
+        self.description = f(&self.description);
+        self.changed = true;
+    }
+
+    pub fn description(&self) -> &ShapeDescription {
+        &self.description
+    }
+}
+
+impl<T: NeedToDraw + Default + Debug + Clone> NeedToDraw for NewShape<T> {
+    fn need_drawing(&self) -> bool {
+        if self.changed {
+            return true;
+        }
+        self.holder.need_drawing()
+    }
+
+    fn changes_drawed(&mut self) {
+        self.changed = false;
+        self.holder.changes_drawed();
+    }
+}
+
+pub struct Shapes<T: NeedToDraw + Default + Debug + Clone> {
+    data: SortedVec<NewShape<T>>,
+    changed: bool,
+}
+
+impl<T: NeedToDraw + Default + Debug + Clone> Shapes<T>
+where
+    T: NeedToDraw,
+{
+    pub fn new() -> Shapes<T> {
         Shapes {
-            shapes: HashMap::<String, Shape>::new(),
+            data: SortedVec::<NewShape<T>>::new(),
             changed: false,
         }
     }
 
-    pub fn add(&mut self, shape: Shape) {
-        let res = self.shapes.insert(shape.id.clone(), shape);
-        if let Some(previous) = res {
-            info!("Drop existing shape {}", format!("{previous:?}"));
-        }
+    pub fn add(&mut self, shape: NewShape<T>) {
+        let index = self.data.insert(shape);
         self.changed = true
     }
 
     pub fn change<F>(&mut self, key: &String, f: &mut F)
     where
-        F: FnMut(&mut Shape),
+        F: FnMut(&mut NewShape<T>),
     {
-        let value = self.shapes.get_mut(key);
-        if let Some(actual_value) = value {
-            f(actual_value);
-            self.changed = true
-        } else {
-            info!("No shape with key {}", key)
+        match self.find_shape_by_key(key) {
+            Some(index) => {
+                let ref mut p = self.data;
+                self.changed = p.mutate_vec(|data| {
+                    let v = data.get_mut(index);
+                    match v {
+                        Some(value) => {
+                            f(value);
+                            return true;
+                        }
+                        _ => return false,
+                    };
+                });
+            }
+            None => info!("No shape with key {}", key),
         }
     }
 
+    fn find_shape_by_key(&self, key: &String) -> Option<usize> {
+        for (index, shape) in self.data.iter().enumerate() {
+            if shape.id.eq(key) {
+                return Some(index);
+            }
+        }
+        return None;
+    }
+
     pub fn remove(&mut self, key: &String) {
-        if let None = self.shapes.remove(key) {
-            info!("Remove not existing key {}", key)
+        match self.find_shape_by_key(key) {
+            Some(_) => return,
+            None => info!("Remove not existing key {}", key),
         }
     }
 
     pub fn generate_id(&self) -> String {
-        let size = self.shapes.len();
+        let size = self.data.len();
         format!("{size:?}")
     }
-    pub fn iter(&self) -> std::collections::hash_map::Values<String, Shape> {
-        self.shapes.values()
+    pub fn iter(&self) -> core::slice::Iter<'_, NewShape<T>> {
+        self.data.iter()
     }
 
     pub fn need_drawing(&self) -> bool {
